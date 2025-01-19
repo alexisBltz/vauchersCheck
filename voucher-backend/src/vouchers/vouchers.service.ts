@@ -1,3 +1,4 @@
+
 import { Injectable, BadRequestException } from '@nestjs/common';
 import vision from '@google-cloud/vision';
 import { createClient } from '@supabase/supabase-js';
@@ -21,7 +22,6 @@ export class VouchersService {
     try {
       const fileName = `vouchers/${Date.now()}_${file.originalname}`;
 
-      // Subir el archivo
       const { data, error } = await this.supabase.storage
         .from('imgvauchers')
         .upload(fileName, file.buffer, {
@@ -32,21 +32,15 @@ export class VouchersService {
         throw new BadRequestException(`Error uploading image: ${error.message}`);
       }
 
-      // Obtener la URL pública
       const { data: urlData } = await this.supabase.storage
         .from('imgvauchers')
         .getPublicUrl(fileName);
 
-      // Asegurarnos de que tenemos una URL absoluta
       if (!urlData || !urlData.publicUrl) {
         throw new Error('Failed to get public URL');
       }
 
-      // Construir la URL completa
-      const publicUrl = urlData.publicUrl;
-      console.log('Generated URL:', publicUrl); // Para debugging
-
-      return publicUrl;
+      return urlData.publicUrl;
     } catch (error) {
       console.error('Upload error:', error);
       throw new Error(`Failed to upload image to bucket: ${error.message}`);
@@ -58,36 +52,20 @@ export class VouchersService {
    */
   async extractData(imageUrl: string): Promise<string> {
     try {
-      let imageBuffer: Buffer;
-
-      if (imageUrl.startsWith('data:') || imageUrl.startsWith('http')) {
-        // Si es una URL o data URL, descargamos la imagen
-        const response = await fetch(imageUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch image: ${response.statusText}`);
-        }
-        imageBuffer = Buffer.from(await response.arrayBuffer());
-      } else {
-        // Si no es una URL, asumimos que es un buffer
-        imageBuffer = Buffer.from(imageUrl, 'base64');
-      }
-
-      // Descargamos la imagen de la URL
       const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.statusText}`);
+      }
+      const imageBuffer = Buffer.from(await response.arrayBuffer());
 
-      // Realizamos la detección de texto
       const [result] = await this.client.textDetection({
-        image: {
-          content: imageBuffer
-        }
+        image: { content: imageBuffer },
       });
 
-      // Verificamos si hay resultados
       if (!result.fullTextAnnotation) {
         throw new Error('No se encontró texto en la imagen');
       }
 
-      // Devolvemos el texto completo
       return result.fullTextAnnotation.text;
     } catch (error) {
       console.error('Error al extraer texto:', error);
@@ -100,28 +78,23 @@ export class VouchersService {
    */
   async saveData(data: { imageUrl: string; extractedText: string }) {
     try {
-      // Agregar logs para debugging
-      console.log('Attempting to save data:', data);
-
       const { data: insertedData, error } = await this.supabase
         .from('vouchersData')
         .insert([
           {
             image_url: data.imageUrl,
             extracted_text: data.extractedText,
-            created_at: new Date().toISOString(), // Opcional: agregar timestamp
-            status: true // Opcional: agregar estado
-          }
+            created_at: new Date().toISOString(),
+            status: true,
+          },
         ])
-        .select(); // Agregamos .select() para obtener los datos insertados
+        .select();
 
       if (error) {
-        console.error('Supabase error:', error);
         throw new Error(`Error saving data to database: ${error.message}`);
       }
 
-      console.log('Data saved successfully:', insertedData);
-      return { message: 'Data saved successfully', data: insertedData };
+      return insertedData;
     } catch (error) {
       console.error('Save error:', error);
       throw new Error(`Failed to save extracted data: ${error.message}`);

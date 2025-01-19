@@ -7,8 +7,5 @@ export declare class VouchersService {
     saveData(data: {
         imageUrl: string;
         extractedText: string;
-    }): Promise<{
-        message: string;
-        data: any[];
-    }>;
+    }): Promise<any[]>;
 }

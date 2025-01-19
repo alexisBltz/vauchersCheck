@@ -35,9 +35,7 @@ let VouchersService = class VouchersService {
             if (!urlData || !urlData.publicUrl) {
                 throw new Error('Failed to get public URL');
             }
-            const publicUrl = urlData.publicUrl;
-            console.log('Generated URL:', publicUrl);
-            return publicUrl;
+            return urlData.publicUrl;
         }
         catch (error) {
             console.error('Upload error:', error);
@@ -46,22 +44,13 @@ let VouchersService = class VouchersService {
     }
     async extractData(imageUrl) {
         try {
-            let imageBuffer;
-            if (imageUrl.startsWith('data:') || imageUrl.startsWith('http')) {
-                const response = await (0, node_fetch_1.default)(imageUrl);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch image: ${response.statusText}`);
-                }
-                imageBuffer = Buffer.from(await response.arrayBuffer());
-            }
-            else {
-                imageBuffer = Buffer.from(imageUrl, 'base64');
-            }
             const response = await (0, node_fetch_1.default)(imageUrl);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch image: ${response.statusText}`);
+            }
+            const imageBuffer = Buffer.from(await response.arrayBuffer());
             const [result] = await this.client.textDetection({
-                image: {
-                    content: imageBuffer
-                }
+                image: { content: imageBuffer },
             });
             if (!result.fullTextAnnotation) {
                 throw new Error('No se encontró texto en la imagen');
@@ -75,7 +64,6 @@ let VouchersService = class VouchersService {
     }
     async saveData(data) {
         try {
-            console.log('Attempting to save data:', data);
             const { data: insertedData, error } = await this.supabase
                 .from('vouchersData')
                 .insert([
@@ -83,16 +71,14 @@ let VouchersService = class VouchersService {
                     image_url: data.imageUrl,
                     extracted_text: data.extractedText,
                     created_at: new Date().toISOString(),
-                    status: true
-                }
+                    status: true,
+                },
             ])
                 .select();
             if (error) {
-                console.error('Supabase error:', error);
                 throw new Error(`Error saving data to database: ${error.message}`);
             }
-            console.log('Data saved successfully:', insertedData);
-            return { message: 'Data saved successfully', data: insertedData };
+            return insertedData;
         }
         catch (error) {
             console.error('Save error:', error);
