@@ -19,6 +19,7 @@ const platform_express_1 = require("@nestjs/platform-express");
 const vouchers_service_1 = require("./vouchers.service");
 const path = require("path");
 const multer_1 = require("multer");
+const save_voucher_data_dto_1 = require("../dto/save-voucher-data.dto");
 let VouchersController = class VouchersController {
     constructor(vouchersService) {
         this.vouchersService = vouchersService;
@@ -29,7 +30,11 @@ let VouchersController = class VouchersController {
         }
         try {
             const imageUrl = await this.vouchersService.uploadImageToBucket(file);
-            return { message: 'Image uploaded successfully', imageUrl };
+            return {
+                message: 'Image uploaded successfully',
+                imageUrl,
+                status: 'success'
+            };
         }
         catch (error) {
             console.error('Error details:', error);
@@ -42,7 +47,12 @@ let VouchersController = class VouchersController {
         }
         try {
             const extractedData = await this.vouchersService.extractData(imageUrl);
-            return { message: 'Text extracted successfully', extractedData };
+            return {
+                message: 'Text extracted and processed successfully',
+                data: extractedData,
+                confidence: this.calculateConfidenceScore(extractedData),
+                status: 'success'
+            };
         }
         catch (error) {
             console.error('Error details:', error);
@@ -50,18 +60,55 @@ let VouchersController = class VouchersController {
         }
     }
     async saveData(data) {
-        const { imageUrl, extractedText } = data;
-        if (!imageUrl || !extractedText) {
-            throw new common_1.BadRequestException('Image URL and extracted text are required');
-        }
         try {
-            const result = await this.vouchersService.saveData({ imageUrl, extractedText });
-            return { message: 'Data saved successfully', result };
+            const result = await this.vouchersService.saveData(data);
+            return {
+                message: 'Data saved successfully',
+                result,
+                status: 'success'
+            };
         }
         catch (error) {
             console.error('Error details:', error);
             throw new common_1.BadRequestException(`Error saving data: ${error.message}`);
         }
+    }
+    calculateConfidenceScore(data) {
+        let score = 0;
+        let totalFields = 0;
+        if (data.amount) {
+            score += 1;
+            totalFields += 1;
+        }
+        if (data.transactionDate) {
+            score += 1;
+            totalFields += 1;
+        }
+        if (data.transactionNumber) {
+            score += 1;
+            totalFields += 1;
+        }
+        if (data.merchantName) {
+            score += 1;
+            totalFields += 1;
+        }
+        if (data.currency) {
+            score += 1;
+            totalFields += 1;
+        }
+        if (data.items && data.items.length > 0) {
+            score += 2;
+            totalFields += 2;
+        }
+        if (data.totalAmount) {
+            score += 1;
+            totalFields += 1;
+        }
+        if (data.taxAmount) {
+            score += 1;
+            totalFields += 1;
+        }
+        return totalFields > 0 ? (score / totalFields) * 100 : 0;
     }
 };
 exports.VouchersController = VouchersController;
@@ -77,6 +124,9 @@ __decorate([
             else {
                 cb(new common_1.BadRequestException('Invalid file type. Only .png, .jpg, .jpeg are allowed.'), false);
             }
+        },
+        limits: {
+            fileSize: 5 * 1024 * 1024,
         },
     })),
     __param(0, (0, common_1.UploadedFile)()),
@@ -95,7 +145,7 @@ __decorate([
     (0, common_1.Post)('save'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [save_voucher_data_dto_1.SaveVoucherDataDto]),
     __metadata("design:returntype", Promise)
 ], VouchersController.prototype, "saveData", null);
 exports.VouchersController = VouchersController = __decorate([
