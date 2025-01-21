@@ -34,7 +34,7 @@ interface ExtractedDataListProps {
 }
 
 const ExtractedDataList: React.FC<ExtractedDataListProps> = ({ data }) => {
-    const [selectedVoucher, setSelectedVoucher] = useState<ExtractedData | null>(null)
+    const [, setSelectedVoucher] = useState<ExtractedData | null>(null)
 
     if (data.length === 0) return null
 

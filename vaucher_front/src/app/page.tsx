@@ -25,8 +25,8 @@ interface ExtractedData {
 }
 
 export default function Home() {
-  const [status, setStatus] = useState<{ type: "success" | "error" | "loading" | ""; message: string }>({
-    type: "",
+  const [status, setStatus] = useState<{ type: "success" | "error" | "loading"; message: string }>({
+    type: "loading",
     message: "",
   })
   const [extractedData, setExtractedData] = useState<ExtractedData[]>([])
@@ -104,7 +104,7 @@ export default function Home() {
 
   const handleDiscard = () => {
     setPendingVoucher(null)
-    setStatus({ type: "", message: "" })
+    setStatus({ type: "loading", message: "" })
   }
 
   return (

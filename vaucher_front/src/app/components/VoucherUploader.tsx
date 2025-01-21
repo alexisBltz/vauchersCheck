@@ -5,7 +5,6 @@ import { useState } from "react"
 import { Upload } from "lucide-react"
 import { useDropzone } from "react-dropzone"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 
 interface VoucherUploaderProps {
     onUpload: (file: File) => Promise<void>
