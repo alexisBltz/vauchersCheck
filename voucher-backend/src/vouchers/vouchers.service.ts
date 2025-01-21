@@ -98,10 +98,13 @@ export class VouchersService {
   /**
    * Guardar datos en Supabase
    */
+  /**
+   * Guardar datos en Supabase
+   */
   async saveData(data: SaveVoucherDataDto) {
     try {
       const { data: insertedData, error } = await this.supabase
-        .from('vouchersData')
+        .from('vouchersdata')
         .insert([
           {
             image_url: data.imageUrl,

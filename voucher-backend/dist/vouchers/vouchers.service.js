@@ -84,7 +84,7 @@ let VouchersService = class VouchersService {
     async saveData(data) {
         try {
             const { data: insertedData, error } = await this.supabase
-                .from('vouchersData')
+                .from('vouchersdata')
                 .insert([
                 {
                     image_url: data.imageUrl,
