@@ -18,7 +18,15 @@ export declare class VouchersController {
     }>;
     saveData(data: SaveVoucherDataDto): Promise<{
         message: string;
-        result: any[];
+        result: {
+            status: string;
+            data: any[];
+            message?: undefined;
+        } | {
+            status: string;
+            message: string;
+            data?: undefined;
+        };
         status: string;
     }>;
     private calculateConfidenceScore;

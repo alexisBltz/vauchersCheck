@@ -68,78 +68,6 @@ let VouchersService = class VouchersService {
             throw new Error(`Error al extraer texto de la imagen: ${error.message}`);
         }
     }
-    parseItemLine(match) {
-        try {
-            return {
-                description: match[2].trim(),
-                quantity: parseFloat(match[1]),
-                unitPrice: parseFloat(match[3].replace(',', '.')),
-                totalPrice: parseFloat(match[1]) * parseFloat(match[3].replace(',', '.'))
-            };
-        }
-        catch (error) {
-            return null;
-        }
-    }
-    async saveData(data) {
-        try {
-            const { data: insertedData, error } = await this.supabase
-                .from('vouchersdata')
-                .insert([
-                {
-                    image_url: data.imageUrl,
-                    extracted_data: data.extractedData,
-                    created_at: new Date().toISOString(),
-                    status: true,
-                },
-            ])
-                .select();
-            if (error) {
-                throw new Error(`Error saving data to database: ${error.message}`);
-            }
-            return insertedData;
-        }
-        catch (error) {
-            console.error('Save error:', error);
-            throw new Error(`Failed to save extracted data: ${error.message}`);
-        }
-    }
-    detectLanguage(text) {
-        const detection = this.lngDetector.detect(text, 1);
-        return detection.length > 0 ? detection[0][0] : 'spanish';
-    }
-    calculateAmountConfidence(amount, context) {
-        let confidence = 0;
-        if (amount.toFixed(2).match(/\.\d{2}$/))
-            confidence += 0.3;
-        const keywordsNearby = ['total', 'monto', 'pago', 's/', 'pen', 'soles'].some(keyword => context.toLowerCase().includes(keyword));
-        if (keywordsNearby)
-            confidence += 0.4;
-        if (amount > 0 && amount < 100000)
-            confidence += 0.3;
-        return confidence;
-    }
-    calculateTax(amount) {
-        if (!amount)
-            return undefined;
-        return Math.round((amount * 0.18) * 100) / 100;
-    }
-    extractCurrency(text) {
-        const currencyPatterns = {
-            PEN: [/soles/i, /pen/i, /s\/\./i],
-            USD: [/dólares/i, /dolares/i, /usd/i, /\$/],
-            EUR: [/euros/i, /eur/i, /€/]
-        };
-        for (const [currency, patterns] of Object.entries(currencyPatterns)) {
-            if (patterns.some(pattern => text.match(pattern))) {
-                return currency;
-            }
-        }
-        return undefined;
-    }
-    normalizeDate(dateStr, language) {
-        return dateStr;
-    }
     extractAmount(text) {
         const totalPatterns = [
             /TOTAL\s*S\/\s*(\d+[.,]\d{2})/i,
@@ -236,6 +164,32 @@ let VouchersService = class VouchersService {
             rawText: text
         };
         return extractedData;
+    }
+    async saveData(data) {
+        if (!data.imageUrl || !data.extractedData) {
+            throw new Error("Datos incompletos: faltan imageUrl o extractedData");
+        }
+        try {
+            const { data: insertedData, error } = await this.supabase
+                .from('vouchersdata')
+                .insert([
+                {
+                    image_url: data.imageUrl,
+                    extracted_data: data.extractedData,
+                    created_at: new Date().toISOString(),
+                    status: true,
+                },
+            ])
+                .select();
+            if (error) {
+                throw new Error(`Error saving data to database: ${error.message}`);
+            }
+            return { status: 'success', data: insertedData };
+        }
+        catch (error) {
+            console.error('Save error:', error);
+            return { status: 'error', message: error instanceof Error ? error.message : "Error desconocido" };
+        }
     }
 };
 exports.VouchersService = VouchersService;

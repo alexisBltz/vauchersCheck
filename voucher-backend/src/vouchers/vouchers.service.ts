@@ -79,123 +79,6 @@ export class VouchersService {
       throw new Error(`Error al extraer texto de la imagen: ${error.message}`);
     }
   }
-  /**
-   * Parsear una línea de item
-   */
-  private parseItemLine(match: RegExpMatchArray): IVoucherItem | null {
-    try {
-      return {
-        description: match[2].trim(),
-        quantity: parseFloat(match[1]),
-        unitPrice: parseFloat(match[3].replace(',', '.')),
-        totalPrice: parseFloat(match[1]) * parseFloat(match[3].replace(',', '.'))
-      };
-    } catch (error) {
-      return null;
-    }
-  }
-
-  /**
-   * Guardar datos en Supabase
-   */
-  /**
-   * Guardar datos en Supabase
-   */
-  async saveData(data: SaveVoucherDataDto) {
-    try {
-      const { data: insertedData, error } = await this.supabase
-        .from('vouchersdata')
-        .insert([
-          {
-            image_url: data.imageUrl,
-            extracted_data: data.extractedData,
-            created_at: new Date().toISOString(),
-            status: true,
-          },
-        ])
-        .select();
-
-      if (error) {
-        throw new Error(`Error saving data to database: ${error.message}`);
-      }
-
-      return insertedData;
-    } catch (error) {
-      console.error('Save error:', error);
-      throw new Error(`Failed to save extracted data: ${error.message}`);
-    }
-  }
-
-
-  /**
-   * Detectar el idioma del texto
-   */
-  private detectLanguage(text: string): string {
-    const detection = this.lngDetector.detect(text, 1);
-    return detection.length > 0 ? detection[0][0] : 'spanish'; // default to spanish
-  }
-
-  /**
-   * Calcular nivel de confianza para un monto encontrado
-   */
-  private calculateAmountConfidence(amount: number, context: string): number {
-    let confidence = 0;
-
-    // Verificar si tiene formato típico de monto
-    if (amount.toFixed(2).match(/\.\d{2}$/)) confidence += 0.3;
-
-    // Verificar si está cerca de palabras clave
-    const keywordsNearby = ['total', 'monto', 'pago', 's/', 'pen', 'soles'].some(
-      keyword => context.toLowerCase().includes(keyword)
-    );
-    if (keywordsNearby) confidence += 0.4;
-
-    // Verificar si el monto parece razonable
-    if (amount > 0 && amount < 100000) confidence += 0.3;
-
-    return confidence;
-  }
-
-  /**
-   * Extraer fecha usando procesamiento contextual
-   */
-
-  /**
-   * Calcular impuesto basado en el monto total
-   */
-  private calculateTax(amount: number | undefined): number | undefined {
-    if (!amount) return undefined;
-    return Math.round((amount * 0.18) * 100) / 100; // IGV 18%
-  }
-
-
-  /**
-   * Extraer moneda del texto
-   */
-  private extractCurrency(text: string): string | undefined {
-    const currencyPatterns = {
-      PEN: [/soles/i, /pen/i, /s\/\./i],
-      USD: [/dólares/i, /dolares/i, /usd/i, /\$/],
-      EUR: [/euros/i, /eur/i, /€/]
-    };
-
-    for (const [currency, patterns] of Object.entries(currencyPatterns)) {
-      if (patterns.some(pattern => text.match(pattern))) {
-        return currency;
-      }
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Normalizar formato de fecha
-   */
-  private normalizeDate(dateStr: string, language: string): string {
-    // Implementar normalización de fecha según el idioma y formato deseado
-    // Por ahora retornamos la fecha sin procesar
-    return dateStr;
-  }
   ////////////////////////////////////////////GAA
   /**
    * Extraer monto usando NLP y expresiones regulares mejoradas
@@ -318,7 +201,6 @@ export class VouchersService {
 
     return items;
   }
-
   /**
    * Procesar el texto usando técnicas de NLP
    */
@@ -339,4 +221,39 @@ export class VouchersService {
 
     return extractedData;
   }
+
+  /**
+   * Guardar datos en Supabase
+   */
+  async saveData(data: SaveVoucherDataDto) {
+    if (!data.imageUrl || !data.extractedData) {
+      throw new Error("Datos incompletos: faltan imageUrl o extractedData");
+    }
+
+    try {
+      const { data: insertedData, error } = await this.supabase
+        .from('vouchersdata')
+        .insert([
+          {
+            image_url: data.imageUrl,
+            extracted_data: data.extractedData,
+            created_at: new Date().toISOString(),
+            status: true,
+          },
+        ])
+        .select();
+
+      if (error) {
+        throw new Error(`Error saving data to database: ${error.message}`);
+      }
+
+      return { status: 'success', data: insertedData };
+    } catch (error) {
+      console.error('Save error:', error);
+      return { status: 'error', message: error instanceof Error ? error.message : "Error desconocido" };
+    }
+  }
+
+
+
 }

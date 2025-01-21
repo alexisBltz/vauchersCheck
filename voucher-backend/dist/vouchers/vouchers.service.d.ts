@@ -9,13 +9,6 @@ export declare class VouchersService {
     private stemmer;
     uploadImageToBucket(file: Multer.File): Promise<string>;
     extractData(imageUrl: string): Promise<IExtractedVoucherData>;
-    private parseItemLine;
-    saveData(data: SaveVoucherDataDto): Promise<any[]>;
-    private detectLanguage;
-    private calculateAmountConfidence;
-    private calculateTax;
-    private extractCurrency;
-    private normalizeDate;
     private extractAmount;
     private extractDate;
     private convertSpanishMonth;
@@ -23,4 +16,13 @@ export declare class VouchersService {
     private extractMerchantName;
     private extractItems;
     private processTextWithNLP;
+    saveData(data: SaveVoucherDataDto): Promise<{
+        status: string;
+        data: any[];
+        message?: undefined;
+    } | {
+        status: string;
+        message: string;
+        data?: undefined;
+    }>;
 }
