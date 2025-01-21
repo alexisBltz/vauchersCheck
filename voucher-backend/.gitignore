@@ -30,3 +30,4 @@ pids
 
 # Specific Ignored Files
 token/
+voucher-backend/src/token/vision.json
