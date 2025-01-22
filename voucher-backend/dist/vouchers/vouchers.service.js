@@ -191,6 +191,21 @@ let VouchersService = class VouchersService {
             return { status: 'error', message: error instanceof Error ? error.message : "Error desconocido" };
         }
     }
+    async getAllVouchers() {
+        const { data, error } = await this.supabase
+            .from('vouchersdata')
+            .select('id, image_url, extracted_data, created_at, status');
+        if (error) {
+            throw new Error(`Error fetching vouchers: ${error.message}`);
+        }
+        return data.map((voucher) => ({
+            id: voucher.id,
+            imageUrl: voucher.image_url,
+            extractedData: voucher.extracted_data,
+            createdAt: voucher.created_at,
+            status: voucher.status,
+        }));
+    }
 };
 exports.VouchersService = VouchersService;
 exports.VouchersService = VouchersService = __decorate([

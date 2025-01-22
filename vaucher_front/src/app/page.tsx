@@ -1,10 +1,11 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import VoucherUploader from "@/app/components/VoucherUploader"
 import ExtractedDataList from "@/app/components/ExtractedDataList"
+import VoucherReview from "@/app/components/VoucherReview"
 import StatusMessage from "@/app/components/StatusMessage"
-import VoucherReview from "@/app/components/VaucherReview";
+import VoucherHistoryList from "@/app/components/VoucherHistoryList"
 
 interface ExtractedData {
   id?: string
@@ -24,13 +25,43 @@ interface ExtractedData {
   imageUrl?: string
 }
 
+interface VoucherData {
+  id: number
+  imageUrl: string
+  extractedData: ExtractedData
+  createdAt: string
+  status: boolean
+}
+
 export default function Home() {
-  const [status, setStatus] = useState<{ type: "success" | "error" | "loading"; message: string }>({
-    type: "loading",
+  const [status, setStatus] = useState<{ type: "success" | "error" | "loading" | ""; message: string }>({
+    type: "",
     message: "",
   })
   const [extractedData, setExtractedData] = useState<ExtractedData[]>([])
   const [pendingVoucher, setPendingVoucher] = useState<ExtractedData | null>(null)
+  const [voucherHistory, setVoucherHistory] = useState<VoucherData[]>([])
+
+  useEffect(() => {
+    fetchVoucherHistory()
+  }, [])
+
+  const fetchVoucherHistory = async () => {
+    try {
+      const response = await fetch("http://localhost:8080/vouchers")
+      const data = await response.json()
+      if (data.status === "success") {
+        setVoucherHistory(data.data)
+      } else {
+        throw new Error(data.message || "Error al cargar el historial de vouchers")
+      }
+    } catch (error) {
+      setStatus({
+        type: "error",
+        message: error instanceof Error ? error.message : "Error desconocido al cargar el historial",
+      })
+    }
+  }
 
   const handleUpload = async (file: File) => {
     try {
@@ -97,6 +128,7 @@ export default function Home() {
       setExtractedData((prevData) => [...prevData, voucherData])
       setPendingVoucher(null)
       setStatus({ type: "success", message: "Voucher guardado exitosamente" })
+      fetchVoucherHistory() // Actualizar el historial después de guardar
     } catch (error) {
       setStatus({ type: "error", message: error instanceof Error ? error.message : "Error desconocido" })
     }
@@ -104,7 +136,7 @@ export default function Home() {
 
   const handleDiscard = () => {
     setPendingVoucher(null)
-    setStatus({ type: "loading", message: "" })
+    setStatus({ type: "", message: "" })
   }
 
   return (
@@ -115,6 +147,7 @@ export default function Home() {
           {status.message && <StatusMessage type={status.type} message={status.message} />}
           {pendingVoucher && <VoucherReview voucherData={pendingVoucher} onSave={handleSave} onDiscard={handleDiscard} />}
           <ExtractedDataList data={extractedData} />
+          <VoucherHistoryList vouchers={voucherHistory} itemsPerPage={5} />
         </div>
       </main>
   )

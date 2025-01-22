@@ -5,10 +5,7 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Configuración básica de CORS
-  app.enableCors();
-
-  // Opcional: configuración específica
+  // Configuración de CORS
   app.enableCors({
     origin: 'http://localhost:3000', // Dominio permitido (frontend)
     methods: 'GET,POST',            // Métodos permitidos

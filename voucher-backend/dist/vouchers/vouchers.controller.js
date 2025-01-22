@@ -73,6 +73,20 @@ let VouchersController = class VouchersController {
             throw new common_1.BadRequestException(`Error saving data: ${error.message}`);
         }
     }
+    async getAllVouchers() {
+        try {
+            const vouchers = await this.vouchersService.getAllVouchers();
+            return {
+                message: 'Vouchers retrieved successfully',
+                data: vouchers,
+                status: 'success'
+            };
+        }
+        catch (error) {
+            console.error('Error details:', error);
+            throw new common_1.BadRequestException(`Error retrieving vouchers: ${error.message}`);
+        }
+    }
     calculateConfidenceScore(data) {
         let score = 0;
         let totalFields = 0;
@@ -148,6 +162,12 @@ __decorate([
     __metadata("design:paramtypes", [save_voucher_data_dto_1.SaveVoucherDataDto]),
     __metadata("design:returntype", Promise)
 ], VouchersController.prototype, "saveData", null);
+__decorate([
+    (0, common_1.Get)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], VouchersController.prototype, "getAllVouchers", null);
 exports.VouchersController = VouchersController = __decorate([
     (0, common_1.Controller)('vouchers'),
     __metadata("design:paramtypes", [vouchers_service_1.VouchersService])

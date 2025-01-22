@@ -25,4 +25,5 @@ export declare class VouchersService {
         message: string;
         data?: undefined;
     }>;
+    getAllVouchers(): Promise<any[]>;
 }

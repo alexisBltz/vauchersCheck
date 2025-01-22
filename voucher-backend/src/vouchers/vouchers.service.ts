@@ -7,6 +7,7 @@ import * as natural from 'natural';
 import LanguageDetect = require('languagedetect');
 import { IExtractedVoucherData, IVoucherItem } from '../interfaces/extracted-voucher-data.interface';
 import { SaveVoucherDataDto } from '../dto/save-voucher-data.dto';
+import { ExtractedVoucherDataDto } from '../dto/extracted-voucher-data.dto';
 
 @Injectable()
 export class VouchersService {
@@ -254,6 +255,23 @@ export class VouchersService {
     }
   }
 
+  async getAllVouchers(): Promise<any[]> {
+    const { data, error } = await this.supabase
+      .from('vouchersdata')
+      .select('id, image_url, extracted_data, created_at, status');
+
+    if (error) {
+      throw new Error(`Error fetching vouchers: ${error.message}`);
+    }
+
+    return data.map((voucher) => ({
+      id: voucher.id,
+      imageUrl: voucher.image_url,
+      extractedData: voucher.extracted_data as ExtractedVoucherDataDto,
+      createdAt: voucher.created_at,
+      status: voucher.status,
+    }));
+  }
 
 
 }

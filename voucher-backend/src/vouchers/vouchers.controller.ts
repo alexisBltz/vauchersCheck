@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, UseInterceptors, UploadedFile, BadRequestException, Get } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { VouchersService } from './vouchers.service';
 import * as path from 'path';
@@ -78,6 +78,20 @@ export class VouchersController {
     } catch (error) {
       console.error('Error details:', error);
       throw new BadRequestException(`Error saving data: ${error.message}`);
+    }
+  }
+  @Get()
+  async getAllVouchers() {
+    try {
+      const vouchers = await this.vouchersService.getAllVouchers();
+      return {
+        message: 'Vouchers retrieved successfully',
+        data: vouchers,
+        status: 'success'
+      };
+    } catch (error) {
+      console.error('Error details:', error);
+      throw new BadRequestException(`Error retrieving vouchers: ${error.message}`);
     }
   }
 

@@ -29,5 +29,10 @@ export declare class VouchersController {
         };
         status: string;
     }>;
+    getAllVouchers(): Promise<{
+        message: string;
+        data: any[];
+        status: string;
+    }>;
     private calculateConfidenceScore;
 }
