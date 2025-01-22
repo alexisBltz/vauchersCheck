@@ -2726,7 +2726,7 @@ var _s = __turbopack_refresh__.signature();
 function Home() {
     _s();
     const [status, setStatus] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])({
-        type: "",
+        type: "loading",
         message: ""
     });
     const [extractedData, setExtractedData] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])([]);
@@ -2846,7 +2846,7 @@ function Home() {
     const handleDiscard = ()=>{
         setPendingVoucher(null);
         setStatus({
-            type: "",
+            type: "loading",
             message: ""
         });
     };
@@ -2916,7 +2916,7 @@ function Home() {
         columnNumber: 7
     }, this);
 }
-_s(Home, "ZYlpVVtoUStgJMGvPedy6v8YyZQ=");
+_s(Home, "ofKvhGWSAAJd6iom7on2nN5VEJk=");
 _c = Home;
 var _c;
 __turbopack_refresh__.register(_c, "Home");
