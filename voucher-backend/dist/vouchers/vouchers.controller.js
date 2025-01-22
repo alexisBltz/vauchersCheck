@@ -20,9 +20,34 @@ const vouchers_service_1 = require("./vouchers.service");
 const path = require("path");
 const multer_1 = require("multer");
 const save_voucher_data_dto_1 = require("../dto/save-voucher-data.dto");
+const data_1 = require("../nlp/training/data");
 let VouchersController = class VouchersController {
     constructor(vouchersService) {
         this.vouchersService = vouchersService;
+    }
+    async testPatterns() {
+        const text = `
+      10:38 AM
+      yape
+      ¡Yapeaste!
+      S/50
+      Ely F. Leguia O.
+      21 ene. 2025 - 10:38 am
+      N° de celular: *** *** 480
+      Destino: Yape
+      N° de operación: 06144082    `;
+        const allPatterns = data_1.TrainingDataService.getAllPatterns();
+        const results = {};
+        for (const [category, patterns] of Object.entries(allPatterns)) {
+            results[category] = [];
+            for (const pattern of patterns) {
+                const match = text.match(pattern);
+                if (match) {
+                    results[category].push(match[1].trim());
+                }
+            }
+        }
+        return results;
     }
     async uploadImage(file) {
         if (!file) {
@@ -126,6 +151,12 @@ let VouchersController = class VouchersController {
     }
 };
 exports.VouchersController = VouchersController;
+__decorate([
+    (0, common_1.Get)('patterns'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], VouchersController.prototype, "testPatterns", null);
 __decorate([
     (0, common_1.Post)('upload'),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file', {

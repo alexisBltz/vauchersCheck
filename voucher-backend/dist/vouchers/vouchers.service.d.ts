@@ -7,15 +7,18 @@ export declare class VouchersService {
     private tokenizer;
     private lngDetector;
     private stemmer;
-    uploadImageToBucket(file: Multer.File): Promise<string>;
+    private classifier;
+    constructor();
+    private initializeClassifier;
     extractData(imageUrl: string): Promise<IExtractedVoucherData>;
+    private processTextWithNLP;
     private extractAmount;
     private extractDate;
+    private extractMerchantName;
     private convertSpanishMonth;
     private extractTransactionNumber;
-    private extractMerchantName;
     private extractItems;
-    private processTextWithNLP;
+    private detectTextUsingVision;
     saveData(data: SaveVoucherDataDto): Promise<{
         status: string;
         data: any[];
@@ -26,4 +29,5 @@ export declare class VouchersService {
         data?: undefined;
     }>;
     getAllVouchers(): Promise<any[]>;
+    uploadImageToBucket(file: Multer.File): Promise<string>;
 }

@@ -5,12 +5,41 @@ import * as path from 'path';
 import { Multer } from 'multer';
 import { SaveVoucherDataDto } from '../dto/save-voucher-data.dto';
 import { IExtractedVoucherData } from '../interfaces/extracted-voucher-data.interface';
+import { TrainingDataService } from '../nlp/training/data';
 
 
 @Controller('vouchers')
 export class VouchersController {
   constructor(private readonly vouchersService: VouchersService) {}
 
+  @Get('patterns')
+  async testPatterns() {
+    const text = `
+      10:38 AM
+      yape
+      ¡Yapeaste!
+      S/50
+      Ely F. Leguia O.
+      21 ene. 2025 - 10:38 am
+      N° de celular: *** *** 480
+      Destino: Yape
+      N° de operación: 06144082    `;
+
+    const allPatterns = TrainingDataService.getAllPatterns();
+    const results: Record<string, string[]> = {};
+
+    for (const [category, patterns] of Object.entries(allPatterns)) {
+      results[category] = [];
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match) {
+          results[category].push(match[1].trim());
+        }
+      }
+    }
+
+    return results;
+  }
   @Post('upload')
   @UseInterceptors(
     FileInterceptor('file', {

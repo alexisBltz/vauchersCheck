@@ -5,6 +5,7 @@ import { IExtractedVoucherData } from '../interfaces/extracted-voucher-data.inte
 export declare class VouchersController {
     private readonly vouchersService;
     constructor(vouchersService: VouchersService);
+    testPatterns(): Promise<Record<string, string[]>>;
     uploadImage(file: Multer.File): Promise<{
         message: string;
         imageUrl: string;

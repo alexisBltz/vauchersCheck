@@ -5,6 +5,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VouchersService = void 0;
 const common_1 = require("@nestjs/common");
@@ -13,6 +16,7 @@ const supabase_js_1 = require("@supabase/supabase-js");
 const node_fetch_1 = require("node-fetch");
 const natural = require("natural");
 const LanguageDetect = require("languagedetect");
+const data_1 = require("../nlp/training/data");
 let VouchersService = class VouchersService {
     constructor() {
         this.client = new vision_1.default.ImageAnnotatorClient({
@@ -22,30 +26,16 @@ let VouchersService = class VouchersService {
         this.tokenizer = new natural.WordTokenizer();
         this.lngDetector = new LanguageDetect();
         this.stemmer = natural.PorterStemmer;
+        this.classifier = new natural.BayesClassifier();
+        this.initializeClassifier().then(r => console.log('Classifier initialized'));
     }
-    async uploadImageToBucket(file) {
-        try {
-            const fileName = `vouchers/${Date.now()}_${file.originalname}`;
-            const { data, error } = await this.supabase.storage
-                .from('imgvauchers')
-                .upload(fileName, file.buffer, {
-                contentType: file.mimetype,
+    async initializeClassifier() {
+        Object.entries(data_1.trainingData).forEach(([category, data]) => {
+            data.examples.forEach(example => {
+                this.classifier.addDocument(example.text, category);
             });
-            if (error) {
-                throw new common_1.BadRequestException(`Error uploading image: ${error.message}`);
-            }
-            const { data: urlData } = await this.supabase.storage
-                .from('imgvauchers')
-                .getPublicUrl(fileName);
-            if (!urlData || !urlData.publicUrl) {
-                throw new Error('Failed to get public URL');
-            }
-            return urlData.publicUrl;
-        }
-        catch (error) {
-            console.error('Upload error:', error);
-            throw new Error(`Failed to upload image to bucket: ${error.message}`);
-        }
+        });
+        this.classifier.train();
     }
     async extractData(imageUrl) {
         try {
@@ -54,19 +44,41 @@ let VouchersService = class VouchersService {
                 throw new Error(`Failed to fetch image: ${response.statusText}`);
             }
             const imageBuffer = Buffer.from(await response.arrayBuffer());
-            const [result] = await this.client.textDetection({
-                image: { content: imageBuffer },
-            });
-            if (!result.fullTextAnnotation) {
-                throw new Error('No se encontró texto en la imagen');
-            }
-            const rawText = result.fullTextAnnotation.text;
-            return this.processTextWithNLP(rawText);
+            const rawText = await this.detectTextUsingVision(imageBuffer);
+            const cleanedText = rawText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+            return this.processTextWithNLP(cleanedText);
         }
         catch (error) {
             console.error('Error al extraer texto:', error);
             throw new Error(`Error al extraer texto de la imagen: ${error.message}`);
         }
+    }
+    async processTextWithNLP(text) {
+        const classification = this.classifier.classify(text);
+        let amount;
+        let transactionDate;
+        let merchantName;
+        if (classification === 'amount') {
+            amount = this.extractAmount(text);
+        }
+        if (classification === 'date') {
+            transactionDate = this.extractDate(text);
+        }
+        if (classification === 'merchant') {
+            merchantName = this.extractMerchantName(text);
+        }
+        const extractedData = {
+            amount,
+            transactionDate,
+            transactionNumber: this.extractTransactionNumber(text),
+            merchantName,
+            items: this.extractItems(text, amount),
+            totalAmount: amount,
+            taxAmount: amount ? Math.round((amount * 0.18) * 100) / 100 : undefined,
+            currency: 'PEN',
+            rawText: text,
+        };
+        return extractedData;
     }
     extractAmount(text) {
         const totalPatterns = [
@@ -80,6 +92,11 @@ let VouchersService = class VouchersService {
             if (match) {
                 return parseFloat(match[1].replace(',', '.'));
             }
+        }
+        const tokens = this.tokenizer.tokenize(text.toLowerCase());
+        const index = tokens.findIndex(token => token.includes('total') || token.includes('importe'));
+        if (index !== -1 && tokens[index + 1]?.match(/^\d+[.,]\d{2}$/)) {
+            return parseFloat(tokens[index + 1].replace(',', '.'));
         }
         return undefined;
     }
@@ -99,6 +116,25 @@ let VouchersService = class VouchersService {
                 return match[0];
             }
         }
+        const tokens = this.tokenizer.tokenize(text.toLowerCase());
+        const index = tokens.findIndex(token => token.includes('fecha') || token.includes('día'));
+        if (index !== -1 && tokens[index + 1]?.match(/^\d{2}[-/]\d{2}[-/]\d{2,4}$/)) {
+            return tokens[index + 1];
+        }
+        return undefined;
+    }
+    extractMerchantName(text) {
+        const merchantPattern = /Destino:?\s*([^\n]+)/i;
+        const match = text.match(merchantPattern);
+        if (match) {
+            return match[1].trim();
+        }
+        const lines = text.split('\n');
+        for (const line of lines) {
+            if (line.includes('Destino:')) {
+                return line.replace(/Destino:?\s*/, '').trim();
+            }
+        }
         return undefined;
     }
     convertSpanishMonth(month) {
@@ -111,9 +147,10 @@ let VouchersService = class VouchersService {
     }
     extractTransactionNumber(text) {
         const refPatterns = [
-            /REF:(\d+)/i,
-            /REFERENCIA:(\d+)/i,
-            /NRO\.?:(\d+)/i
+            /REF:\s*(\d+)/i,
+            /REFERENCIA:\s*(\d+)/i,
+            /NRO\.?:\s*(\d+)/i,
+            /\bTRANSACCIÓN:\s*(\d+)/i
         ];
         for (const pattern of refPatterns) {
             const match = text.match(pattern);
@@ -121,20 +158,14 @@ let VouchersService = class VouchersService {
                 return match[1];
             }
         }
-        return undefined;
-    }
-    extractMerchantName(text) {
-        const lines = text.split('\n');
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].includes('(')) {
-                const match = lines[i].match(/(.+?)\s*\(/);
-                if (match) {
-                    return match[1].trim();
+        const tokens = this.tokenizer.tokenize(text.toLowerCase());
+        const transactionKeywords = ['ref', 'referencia', 'nro', 'transacción'];
+        for (let i = 0; i < tokens.length; i++) {
+            if (transactionKeywords.includes(tokens[i])) {
+                if (tokens[i + 1]?.match(/^\d+$/)) {
+                    return tokens[i + 1];
                 }
             }
-        }
-        if (lines.length > 1 && !lines[1].includes('ID:')) {
-            return lines[1].trim();
         }
         return undefined;
     }
@@ -148,22 +179,34 @@ let VouchersService = class VouchersService {
                 totalPrice: totalAmount
             });
         }
+        const lines = text.split('\n');
+        lines.forEach(line => {
+            const category = this.classifier.classify(line.toLowerCase());
+            if (category === 'producto' || category === 'servicio') {
+                items.push({
+                    description: line.trim(),
+                    quantity: 1,
+                    unitPrice: totalAmount || 0,
+                    totalPrice: totalAmount || 0
+                });
+            }
+        });
         return items;
     }
-    async processTextWithNLP(text) {
-        const amount = this.extractAmount(text);
-        const extractedData = {
-            amount,
-            transactionDate: this.extractDate(text),
-            transactionNumber: this.extractTransactionNumber(text),
-            merchantName: this.extractMerchantName(text),
-            items: this.extractItems(text, amount),
-            totalAmount: amount,
-            taxAmount: amount ? Math.round((amount * 0.18) * 100) / 100 : undefined,
-            currency: 'PEN',
-            rawText: text
-        };
-        return extractedData;
+    async detectTextUsingVision(imageBuffer) {
+        try {
+            const [result] = await this.client.textDetection({
+                image: { content: imageBuffer },
+            });
+            if (!result.fullTextAnnotation) {
+                throw new Error('No se encontró texto en la imagen');
+            }
+            return result.fullTextAnnotation.text;
+        }
+        catch (error) {
+            console.error('Error al usar Google Vision:', error);
+            throw new Error(`Error al detectar texto: ${error.message}`);
+        }
     }
     async saveData(data) {
         if (!data.imageUrl || !data.extractedData) {
@@ -206,9 +249,34 @@ let VouchersService = class VouchersService {
             status: voucher.status,
         }));
     }
+    async uploadImageToBucket(file) {
+        try {
+            const fileName = `vouchers/${Date.now()}_${file.originalname}`;
+            const { data, error } = await this.supabase.storage
+                .from('imgvauchers')
+                .upload(fileName, file.buffer, {
+                contentType: file.mimetype,
+            });
+            if (error) {
+                throw new common_1.BadRequestException(`Error uploading image: ${error.message}`);
+            }
+            const { data: urlData } = await this.supabase.storage
+                .from('imgvauchers')
+                .getPublicUrl(fileName);
+            if (!urlData || !urlData.publicUrl) {
+                throw new Error('Failed to get public URL');
+            }
+            return urlData.publicUrl;
+        }
+        catch (error) {
+            console.error('Upload error:', error);
+            throw new Error(`Failed to upload image to bucket: ${error.message}`);
+        }
+    }
 };
 exports.VouchersService = VouchersService;
 exports.VouchersService = VouchersService = __decorate([
-    (0, common_1.Injectable)()
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [])
 ], VouchersService);
 //# sourceMappingURL=vouchers.service.js.map

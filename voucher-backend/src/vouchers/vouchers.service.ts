@@ -8,6 +8,7 @@ import LanguageDetect = require('languagedetect');
 import { IExtractedVoucherData, IVoucherItem } from '../interfaces/extracted-voucher-data.interface';
 import { SaveVoucherDataDto } from '../dto/save-voucher-data.dto';
 import { ExtractedVoucherDataDto } from '../dto/extracted-voucher-data.dto';
+import { trainingData } from '../nlp/training/data';
 
 @Injectable()
 export class VouchersService {
@@ -22,38 +23,22 @@ export class VouchersService {
   private tokenizer = new natural.WordTokenizer();
   private lngDetector = new LanguageDetect();
   private stemmer = natural.PorterStemmer;
-  /**
-   * Subir imagen al bucket de Supabase directamente desde el buffer.
-   */
-  async uploadImageToBucket(file: Multer.File): Promise<string> {
-    try {
-      const fileName = `vouchers/${Date.now()}_${file.originalname}`;
+  private classifier: natural.BayesClassifier;
 
-      const { data, error } = await this.supabase.storage
-        .from('imgvauchers')
-        .upload(fileName, file.buffer, {
-          contentType: file.mimetype,
-        });
-
-      if (error) {
-        throw new BadRequestException(`Error uploading image: ${error.message}`);
-      }
-
-      const { data: urlData } = await this.supabase.storage
-        .from('imgvauchers')
-        .getPublicUrl(fileName);
-
-      if (!urlData || !urlData.publicUrl) {
-        throw new Error('Failed to get public URL');
-      }
-
-      return urlData.publicUrl;
-    } catch (error) {
-      console.error('Upload error:', error);
-      throw new Error(`Failed to upload image to bucket: ${error.message}`);
-    }
+  constructor() {
+    this.classifier = new natural.BayesClassifier();
+    this.initializeClassifier().then(r => console.log('Classifier initialized'));
   }
+  private async initializeClassifier() {
+    // Inicializar con datos de entrenamiento
+    Object.entries(trainingData).forEach(([category, data]) => {
+      data.examples.forEach(example => {
+        this.classifier.addDocument(example.text, category);
+      });
+    });
 
+    this.classifier.train();
+  }
   /**
    * Extraer y clasificar datos del voucher usando NLP
    */
@@ -65,27 +50,67 @@ export class VouchersService {
       }
       const imageBuffer = Buffer.from(await response.arrayBuffer());
 
-      const [result] = await this.client.textDetection({
-        image: { content: imageBuffer },
-      });
+      const rawText = await this.detectTextUsingVision(imageBuffer);
 
-      if (!result.fullTextAnnotation) {
-        throw new Error('No se encontró texto en la imagen');
-      }
+      // Limpiar el texto
+      const cleanedText = rawText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
 
-      const rawText = result.fullTextAnnotation.text;
-      return this.processTextWithNLP(rawText);
+      return this.processTextWithNLP(cleanedText);
     } catch (error) {
       console.error('Error al extraer texto:', error);
       throw new Error(`Error al extraer texto de la imagen: ${error.message}`);
     }
   }
+
+
   ////////////////////////////////////////////GAA
+
+  /**
+   * Procesar el texto usando técnicas de NLP
+   */
+  private async processTextWithNLP(text: string): Promise<IExtractedVoucherData> {
+    // Usar el clasificador para obtener las categorías (monto, fecha, comercio, etc.)
+    const classification = this.classifier.classify(text);
+
+    let amount;
+    let transactionDate;
+    let merchantName;
+
+    // Si el clasificador detecta que es un monto, busca el monto
+    if (classification === 'amount') {
+      amount = this.extractAmount(text);
+    }
+
+    // Si el clasificador detecta que es una fecha, busca la fecha
+    if (classification === 'date') {
+      transactionDate = this.extractDate(text);
+    }
+
+    // Si el clasificador detecta que es un comercio, busca el nombre del comercio
+    if (classification === 'merchant') {
+      merchantName = this.extractMerchantName(text);
+    }
+
+    // Crear el objeto de datos extraídos
+    const extractedData: IExtractedVoucherData = {
+      amount,
+      transactionDate,
+      transactionNumber: this.extractTransactionNumber(text),
+      merchantName,
+      items: this.extractItems(text, amount),
+      totalAmount: amount,
+      taxAmount: amount ? Math.round((amount * 0.18) * 100) / 100 : undefined,
+      currency: 'PEN',
+      rawText: text,
+    };
+
+    return extractedData;
+  }
   /**
    * Extraer monto usando NLP y expresiones regulares mejoradas
    */
   private extractAmount(text: string): number | undefined {
-    // Buscar patrones específicos de monto total
+    // Buscar patrones específicos de monto total con regex
     const totalPatterns = [
       /TOTAL\s*S\/\s*(\d+[.,]\d{2})/i,
       /TOTAL\s*PEN\s*(\d+[.,]\d{2})/i,
@@ -98,6 +123,13 @@ export class VouchersService {
       if (match) {
         return parseFloat(match[1].replace(',', '.'));
       }
+    }
+
+    // Si no se encuentra por regex, usar NLP para buscar términos similares
+    const tokens = this.tokenizer.tokenize(text.toLowerCase());
+    const index = tokens.findIndex(token => token.includes('total') || token.includes('importe'));
+    if (index !== -1 && tokens[index + 1]?.match(/^\d+[.,]\d{2}$/)) {
+      return parseFloat(tokens[index + 1].replace(',', '.'));
     }
 
     return undefined;
@@ -125,9 +157,39 @@ export class VouchersService {
       }
     }
 
+    // Usar NLP para buscar términos relacionados con fecha
+    const tokens = this.tokenizer.tokenize(text.toLowerCase());
+    const index = tokens.findIndex(token => token.includes('fecha') || token.includes('día'));
+    if (index !== -1 && tokens[index + 1]?.match(/^\d{2}[-/]\d{2}[-/]\d{2,4}$/)) {
+      return tokens[index + 1];
+    }
+
     return undefined;
   }
 
+  /**
+   * Extraer nombre del comercio
+   */
+  private extractMerchantName(text: string): string | undefined {
+    // Patrón para capturar el nombre después de "Destino:"
+    const merchantPattern = /Destino:?\s*([^\n]+)/i;
+
+    const match = text.match(merchantPattern);
+    if (match) {
+      // Retorna el nombre limpio
+      return match[1].trim();
+    }
+
+    // Si no se encuentra, busca en líneas del texto
+    const lines = text.split('\n');
+    for (const line of lines) {
+      if (line.includes('Destino:')) {
+        return line.replace(/Destino:?\s*/, '').trim();
+      }
+    }
+
+    return undefined; // Si no se encuentra ningún nombre
+  }
   /**
    * Convertir mes en español a número
    */
@@ -144,10 +206,12 @@ export class VouchersService {
    * Extraer número de transacción
    */
   private extractTransactionNumber(text: string): string | undefined {
+    // 1. Buscar con expresiones regulares patrones comunes
     const refPatterns = [
-      /REF:(\d+)/i,
-      /REFERENCIA:(\d+)/i,
-      /NRO\.?:(\d+)/i
+      /REF:\s*(\d+)/i,              // Formato REF:123456
+      /REFERENCIA:\s*(\d+)/i,       // Formato REFERENCIA:123456
+      /NRO\.?:\s*(\d+)/i,           // Formato NRO:123456
+      /\bTRANSACCIÓN:\s*(\d+)/i     // Formato TRANSACCIÓN:123456
     ];
 
     for (const pattern of refPatterns) {
@@ -157,40 +221,28 @@ export class VouchersService {
       }
     }
 
-    return undefined;
-  }
+    // 2. Usar NLP para buscar palabras clave y extraer posibles números
+    const tokens = this.tokenizer.tokenize(text.toLowerCase());
+    const transactionKeywords = ['ref', 'referencia', 'nro', 'transacción'];
 
-  /**
-   * Extraer nombre del comercio
-   */
-  private extractMerchantName(text: string): string | undefined {
-    const lines = text.split('\n');
-
-    // Buscar línea que contenga el nombre del comercio
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].includes('(')) {
-        const match = lines[i].match(/(.+?)\s*\(/);
-        if (match) {
-          return match[1].trim();
+    for (let i = 0; i < tokens.length; i++) {
+      if (transactionKeywords.includes(tokens[i])) {
+        // Verificar si el siguiente token es un número válido
+        if (tokens[i + 1]?.match(/^\d+$/)) {
+          return tokens[i + 1];
         }
       }
     }
 
-    // Backup: tomar la segunda línea si no se encuentra el patrón anterior
-    if (lines.length > 1 && !lines[1].includes('ID:')) {
-      return lines[1].trim();
-    }
-
     return undefined;
   }
+
 
   /**
    * Extraer items del voucher
    */
   private extractItems(text: string, totalAmount: number | undefined): IVoucherItem[] {
     const items: IVoucherItem[] = [];
-
-    // Si tenemos un monto total, lo agregamos como item
     if (totalAmount) {
       items.push({
         description: 'Total compra',
@@ -200,27 +252,41 @@ export class VouchersService {
       });
     }
 
+    const lines = text.split('\n');
+    lines.forEach(line => {
+      const category = this.classifier.classify(line.toLowerCase());
+      if (category === 'producto' || category === 'servicio') {
+        items.push({
+          description: line.trim(),
+          quantity: 1,
+          unitPrice: totalAmount || 0,
+          totalPrice: totalAmount || 0
+        });
+      }
+    });
+
     return items;
   }
+
+  //////////////////////////////////////GAAAAAAAAAAAAAAAAAAAAAAAAA
   /**
-   * Procesar el texto usando técnicas de NLP
+   * Detectar texto en una imagen usando Google Vision
    */
-  private async processTextWithNLP(text: string): Promise<IExtractedVoucherData> {
-    const amount = this.extractAmount(text);
+  private async detectTextUsingVision(imageBuffer: Buffer): Promise<string> {
+    try {
+      const [result] = await this.client.textDetection({
+        image: { content: imageBuffer },
+      });
 
-    const extractedData: IExtractedVoucherData = {
-      amount,
-      transactionDate: this.extractDate(text),
-      transactionNumber: this.extractTransactionNumber(text),
-      merchantName: this.extractMerchantName(text),
-      items: this.extractItems(text, amount),
-      totalAmount: amount,
-      taxAmount: amount ? Math.round((amount * 0.18) * 100) / 100 : undefined,
-      currency: 'PEN',
-      rawText: text
-    };
+      if (!result.fullTextAnnotation) {
+        throw new Error('No se encontró texto en la imagen');
+      }
 
-    return extractedData;
+      return result.fullTextAnnotation.text;
+    } catch (error) {
+      console.error('Error al usar Google Vision:', error);
+      throw new Error(`Error al detectar texto: ${error.message}`);
+    }
   }
 
   /**
@@ -271,6 +337,38 @@ export class VouchersService {
       createdAt: voucher.created_at,
       status: voucher.status,
     }));
+  }
+
+  /**
+   * Subir imagen al bucket de Supabase directamente desde el buffer.
+   */
+  async uploadImageToBucket(file: Multer.File): Promise<string> {
+    try {
+      const fileName = `vouchers/${Date.now()}_${file.originalname}`;
+
+      const { data, error } = await this.supabase.storage
+        .from('imgvauchers')
+        .upload(fileName, file.buffer, {
+          contentType: file.mimetype,
+        });
+
+      if (error) {
+        throw new BadRequestException(`Error uploading image: ${error.message}`);
+      }
+
+      const { data: urlData } = await this.supabase.storage
+        .from('imgvauchers')
+        .getPublicUrl(fileName);
+
+      if (!urlData || !urlData.publicUrl) {
+        throw new Error('Failed to get public URL');
+      }
+
+      return urlData.publicUrl;
+    } catch (error) {
+      console.error('Upload error:', error);
+      throw new Error(`Failed to upload image to bucket: ${error.message}`);
+    }
   }
 
 
