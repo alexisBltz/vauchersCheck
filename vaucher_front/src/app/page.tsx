@@ -33,6 +33,8 @@ interface VoucherData {
   status: boolean
 }
 
+const API_URL = "https://4ba9-2800-200-ff30-a7-34a0-22ae-98e8-83be.ngrok-free.app/"
+
 export default function Home() {
   const [status, setStatus] = useState<{ type: "success" | "error" | "loading" ; message: string }>({
     type: "loading",
@@ -48,7 +50,7 @@ export default function Home() {
 
   const fetchVoucherHistory = async () => {
     try {
-      const response = await fetch("http://localhost:8080/vouchers")
+      const response = await fetch(`${API_URL}vouchers`)
       const data = await response.json()
       if (data.status === "success") {
         setVoucherHistory(data.data)
@@ -70,7 +72,7 @@ export default function Home() {
       // Subir imagen
       const formData = new FormData()
       formData.append("file", file)
-      const uploadResponse = await fetch("http://localhost:8080/vouchers/upload", {
+      const uploadResponse = await fetch(`${API_URL}vouchers/upload`, {
         method: "POST",
         body: formData,
       })
@@ -83,7 +85,7 @@ export default function Home() {
       setStatus({ type: "loading", message: "Extrayendo datos..." })
 
       // Extraer datos
-      const extractResponse = await fetch("http://localhost:8080/vouchers/extract", {
+      const extractResponse = await fetch(`${API_URL}vouchers/extract`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageUrl: uploadData.imageUrl }),
@@ -111,7 +113,7 @@ export default function Home() {
     try {
       setStatus({ type: "loading", message: "Guardando datos..." })
 
-      const saveResponse = await fetch("http://localhost:8080/vouchers/save", {
+      const saveResponse = await fetch(`${API_URL}vouchers/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -152,4 +154,3 @@ export default function Home() {
       </main>
   )
 }
-

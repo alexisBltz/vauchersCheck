@@ -9,14 +9,17 @@ import { IExtractedVoucherData, IVoucherItem } from '../interfaces/extracted-vou
 import { SaveVoucherDataDto } from '../dto/save-voucher-data.dto';
 import { ExtractedVoucherDataDto } from '../dto/extracted-voucher-data.dto';
 
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+
 @Injectable()
 export class VouchersService {
   private client = new vision.ImageAnnotatorClient({
     keyFilename: './src/token/vision.json',
   });
   private supabase = createClient(
-    'https://jcharnofjlbhnqbrermk.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpjaGFybm9mamxiaG5xYnJlcm1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzcxNzA3NDcsImV4cCI6MjA1Mjc0Njc0N30.MvtFS7m0KixDox7ZytegoNuY8r9Id16M04ZjLeH2Jn8',
+    supabaseUrl,
+    supabaseKey,
   );
 
   private tokenizer = new natural.WordTokenizer();

@@ -13,12 +13,14 @@ const supabase_js_1 = require("@supabase/supabase-js");
 const node_fetch_1 = require("node-fetch");
 const natural = require("natural");
 const LanguageDetect = require("languagedetect");
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
 let VouchersService = class VouchersService {
     constructor() {
         this.client = new vision_1.default.ImageAnnotatorClient({
             keyFilename: './src/token/vision.json',
         });
-        this.supabase = (0, supabase_js_1.createClient)('https://jcharnofjlbhnqbrermk.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpjaGFybm9mamxiaG5xYnJlcm1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzcxNzA3NDcsImV4cCI6MjA1Mjc0Njc0N30.MvtFS7m0KixDox7ZytegoNuY8r9Id16M04ZjLeH2Jn8');
+        this.supabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseKey);
         this.tokenizer = new natural.WordTokenizer();
         this.lngDetector = new LanguageDetect();
         this.stemmer = natural.PorterStemmer;
